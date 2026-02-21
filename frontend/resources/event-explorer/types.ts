@@ -156,6 +156,42 @@ export const researchInputSchema = z.object({
   ).min(1),
 });
 
+export const riskInputMarketSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  current_price: z.number().min(0).max(1).optional(),
+  description: z.string().optional(),
+});
+
+export const riskManagementInputSchema = z.object({
+  research_output: z.record(z.string(), z.unknown()),
+  main_event: z.object({
+    title: z.string(),
+    description: z.string().optional(),
+  }),
+  markets: z.array(riskInputMarketSchema).min(1),
+});
+
+export const predictionSchema = z.enum(["yes", "no"]);
+
+export const confidenceLevelSchema = z.enum(["high", "medium", "low"]);
+
+export const marketSignalSchema = z.object({
+  market_id: z.string(),
+  market_title: z.string(),
+  prediction: predictionSchema,
+  confidence: confidenceLevelSchema,
+  rationale: z.string(),
+});
+
+export const riskAnalysisOutputSchema = z.object({
+  event_title: z.string(),
+  signals: z.array(marketSignalSchema),
+  overall_analysis: z.string(),
+  timestamp: z.string(),
+  disclaimer: z.string(),
+});
+
 export type MarketResult = z.infer<typeof marketResultSchema>;
 export type EventExplorerProps = z.infer<typeof propsSchema>;
 export type EventInfo = z.infer<typeof eventInfoSchema>;
@@ -168,3 +204,6 @@ export type SubEventResearch = z.infer<typeof subEventResearchSchema>;
 export type SubEventRelationship = z.infer<typeof subEventRelationshipSchema>;
 export type ResearchOutput = z.infer<typeof researchOutputSchema>;
 export type ResearchInput = z.infer<typeof researchInputSchema>;
+export type RiskManagementInput = z.infer<typeof riskManagementInputSchema>;
+export type MarketSignal = z.infer<typeof marketSignalSchema>;
+export type RiskAnalysisOutput = z.infer<typeof riskAnalysisOutputSchema>;

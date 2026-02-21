@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Callable, Coroutine
 
@@ -41,6 +42,98 @@ class ReconciliationResult:
 # ---------------------------------------------------------------------------
 
 
+def _extract_chat_text(response: object) -> str:
+    """Extract plain text from Chat Completions responses."""
+    choices = getattr(response, "choices", None)
+    if not choices:
+        return ""
+    message = getattr(choices[0], "message", None)
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks: list[str] = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if text:
+                    chunks.append(str(text))
+            else:
+                text = getattr(item, "text", None)
+                if text:
+                    chunks.append(str(text))
+        return "\n".join(chunks)
+    return str(content)
+
+
+def _strip_markdown_fences(raw_text: str) -> str:
+    """Strip markdown code fences if the model wraps JSON in them."""
+    if raw_text.startswith("```"):
+        raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3].strip()
+    return raw_text
+
+
+def _parse_json_from_text(raw_text: str) -> dict:
+    """Parse JSON from model output, tolerating wrapper text."""
+    stripped = _strip_markdown_fences(raw_text).strip()
+    try:
+        parsed = json.loads(stripped)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        pass
+
+    match = re.search(r"\{.*\}", stripped, re.DOTALL)
+    if not match:
+        raise json.JSONDecodeError("No JSON object found", stripped, 0)
+    parsed = json.loads(match.group(0))
+    return parsed if isinstance(parsed, dict) else {}
+
+
+async def _run_reconciliation_completion(
+    client: AsyncOpenAI,
+    prompt: str,
+    config: RiskAgentConfig,
+) -> str:
+    """Run reconciliation via Responses API when available, else Chat Completions."""
+    system_msg = (
+        "You are a JSON-only response bot for risk "
+        "reconciliation. Return ONLY valid JSON, no "
+        "markdown fences, no explanation outside the "
+        "JSON object."
+    )
+
+    if hasattr(client, "responses"):
+        response = await client.responses.create(
+            model=config.model,
+            input=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt},
+            ],
+        )
+        return response.output_text.strip()
+
+    try:
+        response = await client.chat.completions.create(
+            model=config.model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+        )
+    except Exception:
+        response = await client.chat.completions.create(
+            model=config.model,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    return _extract_chat_text(response).strip()
+
+
 async def reconcile_signals(
     client: AsyncOpenAI,
     main_event_title: str,
@@ -63,40 +156,25 @@ async def reconcile_signals(
     )
 
     try:
-        response = await asyncio.wait_for(
-            client.responses.create(
-                model=config.model,
-                input=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a JSON-only response bot for risk "
-                            "reconciliation. Return ONLY valid JSON, no "
-                            "markdown fences, no explanation outside the "
-                            "JSON object."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-            ),
+        raw_text = await asyncio.wait_for(
+            _run_reconciliation_completion(client, prompt, config),
             timeout=config.reconciliation_timeout,
         )
+        parsed = _parse_json_from_text(raw_text)
 
-        raw_text = response.output_text.strip()
-
-        # Strip markdown fences if the model adds them
-        if raw_text.startswith("```"):
-            raw_text = (
-                raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
-            )
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3].strip()
-
-        parsed = json.loads(raw_text)
+        raw_signals = parsed.get("signals", [])
+        signals = (
+            [dict(sig) for sig in raw_signals if isinstance(sig, dict)]
+            if isinstance(raw_signals, list)
+            else []
+        )
+        overall_analysis = parsed.get("overall_analysis", "")
+        if not isinstance(overall_analysis, str):
+            overall_analysis = str(overall_analysis)
 
         return ReconciliationResult(
-            signals=parsed.get("signals", []),
-            overall_analysis=parsed.get("overall_analysis", ""),
+            signals=signals,
+            overall_analysis=overall_analysis,
         )
 
     except asyncio.TimeoutError:

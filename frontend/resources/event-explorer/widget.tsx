@@ -11,9 +11,17 @@ import type {
   NewsLink,
   ResearchInput,
   ResearchOutput,
+  RiskAnalysisOutput,
+  RiskManagementInput,
   SentimentRating,
 } from "./types";
-import { propsSchema, researchInputSchema, researchOutputSchema } from "./types";
+import {
+  propsSchema,
+  researchInputSchema,
+  researchOutputSchema,
+  riskAnalysisOutputSchema,
+  riskManagementInputSchema,
+} from "./types";
 
 export const widgetMetadata: WidgetMetadata = {
   description: "Search and display prediction market results from the search API",
@@ -31,6 +39,22 @@ type Props = EventExplorerProps;
 const RESEARCH_API_URL =
   (globalThis as { __RESEARCH_API_URL?: string }).__RESEARCH_API_URL ??
   "http://localhost:8000";
+const API_BASE_URL = RESEARCH_API_URL.replace(/\/$/, "");
+
+type OrderSide = "BUY" | "SELL";
+
+type OrderRequest = {
+  token_id: string;
+  amount: number;
+  side: OrderSide;
+};
+
+type OrderFeedback = {
+  kind: "success" | "error";
+  message: string;
+};
+
+const MIN_ORDER_SHARES = 5;
 
 function toNumber(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -76,6 +100,17 @@ function parseOutcomes(
     name,
     price: prices[index] ?? 0.5,
   }));
+}
+
+function inferCurrentPrice(outcomes?: string | null, outcomePrices?: string | null): number | undefined {
+  const names = parseStringList(outcomes).map((name) => name.toLowerCase());
+  const prices = parseNumberList(outcomePrices);
+  if (prices.length === 0) return undefined;
+
+  const yesIndex = names.findIndex((name) => name === "yes");
+  const candidate = yesIndex >= 0 && prices[yesIndex] != null ? prices[yesIndex] : prices[0];
+  if (!Number.isFinite(candidate) || candidate < 0 || candidate > 1) return undefined;
+  return candidate;
 }
 
 function eventTitleFromResult(result: MarketResult): string {
@@ -142,9 +177,47 @@ function buildFallbackAnalysis(selectedEvent: MarketResult): AnalysisResult {
   };
 }
 
+function buildRiskInput(
+  selectedEvent: MarketResult,
+  researchOutput: ResearchOutput
+): RiskManagementInput {
+  const mainTitle = eventTitleFromResult(selectedEvent);
+  const mainDescription = selectedEvent.description?.trim();
+
+  const mappedMarkets = (selectedEvent.markets ?? []).map((market, index) => {
+    const title = market.title?.trim() || market.question?.trim() || `Market ${index + 1}`;
+    const currentPrice = inferCurrentPrice(market.outcomes, market.outcomePrices);
+    const description = market.question?.trim() || undefined;
+    const marketId = market.id ?? `${selectedEvent.id}-market-${index + 1}`;
+
+    return {
+      id: marketId,
+      title,
+      ...(typeof currentPrice === "number" ? { current_price: currentPrice } : {}),
+      ...(description ? { description } : {}),
+    };
+  });
+
+  const markets =
+    mappedMarkets.length > 0
+      ? mappedMarkets
+      : [{ id: `${selectedEvent.id}-market-1`, title: `${mainTitle} market outlook` }];
+
+  return {
+    research_output: researchOutput,
+    main_event: mainDescription
+      ? {
+          title: mainTitle,
+          description: mainDescription,
+        }
+      : { title: mainTitle },
+    markets,
+  };
+}
+
 async function runResearch(input: ResearchInput): Promise<ResearchOutput> {
   const requestBody = researchInputSchema.parse(input);
-  const response = await fetch(`${RESEARCH_API_URL.replace(/\/$/, "")}/research`, {
+  const response = await fetch(`${API_BASE_URL}/research`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(requestBody),
@@ -160,6 +233,53 @@ async function runResearch(input: ResearchInput): Promise<ResearchOutput> {
     throw new Error(`Research response schema mismatch: ${parsed.error.issues[0]?.message ?? "invalid payload"}`);
   }
   return parsed.data;
+}
+
+async function runRiskAnalysis(input: RiskManagementInput): Promise<RiskAnalysisOutput> {
+  const requestBody = riskManagementInputSchema.parse(input);
+  const response = await fetch(`${API_BASE_URL}/risk`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Risk API error: ${response.status} ${response.statusText}`);
+  }
+
+  const raw = await response.json();
+  const parsed = riskAnalysisOutputSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`Risk response schema mismatch: ${parsed.error.issues[0]?.message ?? "invalid payload"}`);
+  }
+  return parsed.data;
+}
+
+async function placeOrder(request: OrderRequest): Promise<unknown> {
+  const response = await fetch(`${API_BASE_URL}/order`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    let detail = `${response.status} ${response.statusText}`;
+    try {
+      const body = (await response.json()) as { detail?: unknown };
+      if (typeof body.detail === "string" && body.detail.trim().length > 0) {
+        detail = body.detail;
+      }
+    } catch {
+      // Keep fallback detail
+    }
+    throw new Error(`Order API error: ${detail}`);
+  }
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 function formatSentiment(sentiment: SentimentRating): string {
@@ -245,14 +365,29 @@ const EventExplorer: React.FC = () => {
   const { props, isPending, sendFollowUpMessage } = useWidget<Props>();
   const [analysis, setAnalysis] = React.useState<AnalysisResult | null>(null);
   const [research, setResearch] = React.useState<ResearchOutput | null>(null);
+  const [riskAnalysis, setRiskAnalysis] = React.useState<RiskAnalysisOutput | null>(null);
   const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const [isRiskLoading, setIsRiskLoading] = React.useState(false);
   const [researchError, setResearchError] = React.useState<string | null>(null);
+  const [riskError, setRiskError] = React.useState<string | null>(null);
+  const [activeOrderKey, setActiveOrderKey] = React.useState<string | null>(null);
+  const [orderFeedbackByMarket, setOrderFeedbackByMarket] = React.useState<
+    Record<string, OrderFeedback>
+  >({});
+  const riskSignalsByMarketId = new Map(
+    (riskAnalysis?.signals ?? []).map((signal) => [signal.market_id, signal])
+  );
 
   React.useEffect(() => {
     setAnalysis(null);
     setResearch(null);
+    setRiskAnalysis(null);
     setIsAnalyzing(false);
+    setIsRiskLoading(false);
     setResearchError(null);
+    setRiskError(null);
+    setActiveOrderKey(null);
+    setOrderFeedbackByMarket({});
   }, [props.query, props.results]);
 
   if (isPending) {
@@ -276,7 +411,10 @@ const EventExplorer: React.FC = () => {
   const handleAnalyze = async (selectedEvent: MarketResult) => {
     setIsAnalyzing(true);
     setResearchError(null);
+    setRiskError(null);
     setResearch(null);
+    setRiskAnalysis(null);
+    setIsRiskLoading(false);
 
     const fallbackAnalysis = buildFallbackAnalysis(selectedEvent);
     const researchInput = buildResearchInput(selectedEvent, results);
@@ -285,6 +423,17 @@ const EventExplorer: React.FC = () => {
     try {
       const response = await runResearch(researchInput);
       setResearch(response);
+
+      setIsRiskLoading(true);
+      try {
+        const riskInput = buildRiskInput(selectedEvent, response);
+        const riskResponse = await runRiskAnalysis(riskInput);
+        setRiskAnalysis(riskResponse);
+      } catch (error) {
+        setRiskError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsRiskLoading(false);
+      }
     } catch (error) {
       setResearchError(error instanceof Error ? error.message : String(error));
     }
@@ -298,9 +447,58 @@ const EventExplorer: React.FC = () => {
     );
   };
 
+  const handlePlaceOrder = async (
+    marketId: string,
+    side: OrderSide,
+    amount: number
+  ) => {
+    if (!Number.isFinite(amount) || amount < MIN_ORDER_SHARES) {
+      setOrderFeedbackByMarket((previous) => ({
+        ...previous,
+        [marketId]: {
+          kind: "error",
+          message: `Minimum order is ${MIN_ORDER_SHARES} shares`,
+        },
+      }));
+      return;
+    }
+
+    const orderKey = `${marketId}:${side}`;
+    setActiveOrderKey(orderKey);
+
+    try {
+      await placeOrder({
+        token_id: marketId,
+        amount,
+        side,
+      });
+      setOrderFeedbackByMarket((previous) => ({
+        ...previous,
+        [marketId]: {
+          kind: "success",
+          message: `${side} order placed (${amount.toFixed(2)} shares)`,
+        },
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setOrderFeedbackByMarket((previous) => ({
+        ...previous,
+        [marketId]: {
+          kind: "error",
+          message: `Failed to place ${side} order: ${message}`,
+        },
+      }));
+    } finally {
+      setActiveOrderKey((current) => (current === orderKey ? null : current));
+    }
+  };
+
   const mainResult = results[0] ?? null;
   const otherResults = results.slice(1);
   const isAnalysisView = analysis !== null;
+  const isResearchReady = research !== null;
+  const isResearchLoading = isAnalyzing && !isResearchReady && !researchError;
+  const isRiskPending = isResearchReady && isRiskLoading && !riskAnalysis;
   const combinedNewsLinks = research ? mergeNewsLinks(research) : [];
   const mainEventResearch = research?.main_event_research ?? null;
 
@@ -317,7 +515,10 @@ const EventExplorer: React.FC = () => {
                   onClick={() => {
                     setAnalysis(null);
                     setResearch(null);
+                    setRiskAnalysis(null);
                     setResearchError(null);
+                    setRiskError(null);
+                    setIsRiskLoading(false);
                   }}
                 >
                   Back to results
@@ -352,7 +553,7 @@ const EventExplorer: React.FC = () => {
                     Failed to fetch research: {researchError}
                   </p>
                 )}
-                {isAnalyzing && !research && !researchError && (
+                {isResearchLoading && (
                   <ResearchLoadingIndicator />
                 )}
 
@@ -467,28 +668,98 @@ const EventExplorer: React.FC = () => {
                       )}
                     </div>
                   </div>
-                ) : (
+                ) : !isResearchLoading ? (
                   <p className="text-sm text-secondary">
                     No research output returned.
                   </p>
-                )}
+                ) : null}
               </div>
             </div>
 
-            <div className="px-6 pb-6">
-              <h3 className="text-sm font-semibold text-secondary mb-4">
-                {analysis.markets.length} Market{analysis.markets.length !== 1 ? "s" : ""}
-              </h3>
-              <div className="analysis-grid">
-                {analysis.markets.map((market) => (
-                  <MarketAnalysisCard
-                    key={market.id}
-                    market={market}
-                    onOpenMarket={handleMarketClick}
-                  />
-                ))}
+            {isResearchReady && (
+              <>
+                <div className="px-6 pb-4">
+                  <div className="p-4 rounded-xl border border-[rgba(96,165,250,0.25)] bg-[rgba(96,165,250,0.06)]">
+                    <h3 className="text-sm font-semibold text-default mb-3">Analysis</h3>
+                    {riskError && (
+                      <p className="text-sm mb-3" style={{ color: "#f87171" }}>
+                        Failed to fetch risk analysis: {riskError}
+                      </p>
+                    )}
+                    {isRiskPending && (
+                      <div className="mb-3">
+                        <p className="text-sm mb-2 text-secondary">Running risk analysis...</p>
+                        <div className="space-y-2 animate-pulse">
+                          <div className="h-3 w-full rounded bg-[rgba(255,255,255,0.10)]" />
+                          <div className="h-3 w-[92%] rounded bg-[rgba(255,255,255,0.08)]" />
+                          <div className="h-3 w-[78%] rounded bg-[rgba(255,255,255,0.08)]" />
+                        </div>
+                      </div>
+                    )}
+
+                    {riskAnalysis ? (
+                      <div className="space-y-3">
+                        <p className="text-sm text-secondary leading-relaxed whitespace-pre-wrap">
+                          {riskAnalysis.overall_analysis}
+                        </p>
+                        <div>
+                          <p className="text-[11px] text-secondary">
+                            Analysis generated {formatTimestamp(riskAnalysis.timestamp)}
+                          </p>
+                          {riskAnalysis.disclaimer && (
+                            <p className="text-[11px] text-secondary mt-1">{riskAnalysis.disclaimer}</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      !isRiskPending &&
+                      !riskError && (
+                        <p className="text-sm text-secondary">
+                          No risk analysis output returned.
+                        </p>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                <div className="px-6 pb-6">
+                  <h3 className="text-sm font-semibold text-secondary mb-4">
+                    {analysis.markets.length} Market{analysis.markets.length !== 1 ? "s" : ""}
+                  </h3>
+                  <div className="analysis-grid">
+                    {analysis.markets.map((market) => (
+                      <MarketAnalysisCard
+                        key={market.id}
+                        market={market}
+                        signal={riskSignalsByMarketId.get(market.id)}
+                        isSignalLoading={isRiskPending}
+                        onOpenMarket={handleMarketClick}
+                        onPlaceOrder={handlePlaceOrder}
+                        isBuyLoading={activeOrderKey === `${market.id}:BUY`}
+                        isSellLoading={activeOrderKey === `${market.id}:SELL`}
+                        orderFeedback={orderFeedbackByMarket[market.id]}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {!isResearchReady && isResearchLoading ? (
+              <div className="px-6 pb-6">
+                <div className="rounded-xl border border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)] p-4">
+                  <p className="text-sm text-secondary">Preparing market analysis after research completes...</p>
+                </div>
               </div>
-            </div>
+            ) : null}
+            {!isResearchReady && researchError ? (
+              <div className="px-6 pb-6">
+                <div className="rounded-xl border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] p-4">
+                  <p className="text-sm" style={{ color: "#fca5a5" }}>
+                    Analysis is hidden because research did not complete.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : (
           <>
