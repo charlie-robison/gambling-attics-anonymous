@@ -308,9 +308,10 @@ server.tool(
 server.tool(
   {
     name: "get-events",
-    description: "Search prediction market events by query. Returns a main event and related events. Use when a user wants to explore events for a topic.",
+    description: "Search prediction market events by query. Calls the search API and returns ranked market results. Use when a user wants to explore events for a topic.",
     schema: z.object({
-      query: z.string().describe("Search query to find events (e.g. 'presidential election', 'bitcoin', 'crypto', 'AI')"),
+      query: z.string().optional().default("").describe("Search query to find events (e.g. 'presidential election', 'bitcoin', 'crypto', 'AI')"),
+      n_results: z.number().optional().default(10).describe("Number of results to return"),
     }),
     widget: {
       name: "event-explorer",
@@ -318,60 +319,44 @@ server.tool(
       invoked: "Events loaded",
     },
   },
-  async ({ query }) => {
-    const q = query.toLowerCase();
+  async ({ query, n_results }) => {
+    const SEARCH_API_URL = process.env.SEARCH_API_URL || "http://localhost:8000";
 
-    // Score events by relevance
-    const scored = events.map((e) => {
-      let score = 0;
-      if (e.title.toLowerCase().includes(q)) score += 10;
-      if (e.description.toLowerCase().includes(q)) score += 5;
-      if (e.category.toLowerCase().includes(q)) score += 8;
-      if (e.slug.toLowerCase().includes(q)) score += 6;
-      // Check market titles too
-      for (const m of e.markets) {
-        if (m.title.toLowerCase().includes(q)) score += 3;
+    try {
+      const response = await fetch(`${SEARCH_API_URL}/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, n_results }),
+      });
+
+      if (!response.ok) {
+        return widget({
+          props: { results: [], expandedQueries: [], query },
+          output: text(`Search API error: ${response.status} ${response.statusText}`),
+        });
       }
-      return { event: e, score };
-    });
 
-    scored.sort((a, b) => b.score - a.score);
+      const data = await response.json() as {
+        results: Array<Record<string, unknown>>;
+        expanded_queries: string[];
+      };
 
-    const mainEvent = scored[0]?.event;
-    const relatedEvents = scored.slice(1, 5).map((s) => s.event);
-
-    if (!mainEvent) {
       return widget({
         props: {
-          mainEvent: null,
-          relatedEvents: [],
+          results: data.results,
+          expandedQueries: data.expanded_queries,
           query,
         },
-        output: text(`No events found matching "${query}"`),
+        output: text(
+          `Found ${data.results.length} markets matching "${query}"${data.expanded_queries.length > 0 ? ` (also searched: ${data.expanded_queries.join(", ")})` : ""}`
+        ),
+      });
+    } catch (err) {
+      return widget({
+        props: { results: [], expandedQueries: [], query },
+        output: text(`Failed to reach search API: ${err instanceof Error ? err.message : String(err)}`),
       });
     }
-
-    // Return summaries (without full market data — just counts)
-    const toSummary = (e: EventData) => ({
-      id: e.id,
-      title: e.title,
-      description: e.description,
-      slug: e.slug,
-      category: e.category,
-      volume: e.volume,
-      marketCount: e.markets.length,
-    });
-
-    return widget({
-      props: {
-        mainEvent: toSummary(mainEvent),
-        relatedEvents: relatedEvents.map(toSummary),
-        query,
-      },
-      output: text(
-        `Found events matching "${query}": ${mainEvent.title}${relatedEvents.length > 0 ? ` and ${relatedEvents.length} related events` : ""}`
-      ),
-    });
   }
 );
 

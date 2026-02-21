@@ -7,7 +7,7 @@ import type { EventExplorerProps } from "./types";
 import { propsSchema } from "./types";
 
 export const widgetMetadata: WidgetMetadata = {
-  description: "Display prediction market events with a main event and related events",
+  description: "Search and display prediction market results from the search API",
   props: propsSchema,
   exposeAsTool: false,
   metadata: {
@@ -20,7 +20,7 @@ export const widgetMetadata: WidgetMetadata = {
 type Props = EventExplorerProps;
 
 const EventExplorer: React.FC = () => {
-  const { props, isPending, sendFollowUpMessage } = useWidget<Props>();
+  const { props, isPending, callTool } = useWidget<Props>();
 
   if (isPending) {
     return (
@@ -38,13 +38,14 @@ const EventExplorer: React.FC = () => {
     );
   }
 
-  const { mainEvent, relatedEvents, query } = props;
+  const { results, expandedQueries, query } = props;
 
-  const handleAnalyze = (eventId: string, eventTitle: string) => {
-    sendFollowUpMessage(
-      `Analyze the prediction market event "${eventTitle}" (eventId: ${eventId})`
-    );
+  const handleAnalyze = (marketId: string, _question: string) => {
+    callTool("analyze-event", { eventId: marketId });
   };
+
+  const mainResult = results[0] ?? null;
+  const otherResults = results.slice(1);
 
   return (
     <McpUseProvider>
@@ -52,31 +53,36 @@ const EventExplorer: React.FC = () => {
         {/* Header */}
         <div className="px-6 pt-6 pb-4">
           <h2 className="text-xl font-bold text-default">
-            Events for "{query}"
+            Results for "{query}"
           </h2>
+          {expandedQueries.length > 0 && (
+            <p className="text-xs text-secondary mt-1">
+              Also searched: {expandedQueries.join(", ")}
+            </p>
+          )}
         </div>
 
         <div className="px-6 pb-6">
-          {mainEvent ? (
+          {mainResult ? (
             <>
-              {/* Main Event */}
+              {/* Top result */}
               <EventCard
-                event={mainEvent}
+                market={mainResult}
                 onAnalyze={handleAnalyze}
                 isMain
               />
 
-              {/* Related Events */}
-              {relatedEvents.length > 0 && (
+              {/* Other results */}
+              {otherResults.length > 0 && (
                 <>
                   <h3 className="text-sm font-semibold text-secondary mt-6 mb-4">
-                    Related Events
+                    More Results
                   </h3>
                   <div className="related-events-row">
-                    {relatedEvents.map((event) => (
+                    {otherResults.map((market) => (
                       <EventCard
-                        key={event.id}
-                        event={event}
+                        key={market.id}
+                        market={market}
                         onAnalyze={handleAnalyze}
                       />
                     ))}
@@ -86,7 +92,7 @@ const EventExplorer: React.FC = () => {
             </>
           ) : (
             <div className="py-8 text-center text-secondary text-sm">
-              No events found matching "{query}"
+              No markets found matching "{query}"
             </div>
           )}
         </div>
