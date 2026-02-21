@@ -86,17 +86,9 @@ function buildResearchInput(
   selectedEvent: MarketResult,
   allResults: MarketResult[]
 ): ResearchInput {
-  const selectedMarketSubEvents = (selectedEvent.markets ?? [])
-    .map((market) => ({
-      id: market.id ?? undefined,
-      title: market.question?.trim() || market.title?.trim() || "",
-    }))
-    .filter((market) => market.title.length > 0)
-    .slice(0, 12);
-
-  const relatedSubEvents = allResults
+  const sub_events = allResults
     .filter((result) => result.id !== selectedEvent.id)
-    .slice(0, 8)
+    .slice(0, 2)
     .map((result) => {
       const title = eventTitleFromResult(result);
       const description = result.description ?? undefined;
@@ -104,12 +96,9 @@ function buildResearchInput(
     })
     .filter((subEvent) => subEvent.title.length > 0);
 
-  const sub_events =
-    selectedMarketSubEvents.length > 0
-      ? selectedMarketSubEvents
-      : relatedSubEvents.length > 0
-        ? relatedSubEvents
-        : [{ title: `${eventTitleFromResult(selectedEvent)} market outlook` }];
+  if (sub_events.length === 0) {
+    sub_events.push({ title: `${eventTitleFromResult(selectedEvent)} market outlook` });
+  }
 
   const description = selectedEvent.description ?? undefined;
   const main_event = description
@@ -202,6 +191,55 @@ function mergeNewsLinks(research: ResearchOutput): NewsLink[] {
   }
   return deduped;
 }
+
+const RESEARCH_STEPS = [
+  "Searching for recent news...",
+  "Gathering market data...",
+  "Analyzing sentiment...",
+  "Synthesizing findings...",
+];
+
+const ResearchLoadingIndicator: React.FC = () => {
+  const [stepIndex, setStepIndex] = React.useState(0);
+
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setStepIndex((prev) => Math.min(prev + 1, RESEARCH_STEPS.length - 1));
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="mb-3">
+      <div className="space-y-2 mb-3">
+        {RESEARCH_STEPS.map((step, i) => (
+          <div key={step} className="flex items-center gap-2">
+            {i < stepIndex ? (
+              <span className="text-xs" style={{ color: "#4ade80" }}>&#10003;</span>
+            ) : i === stepIndex ? (
+              <span className="research-spinner" />
+            ) : (
+              <span style={{ width: 14, height: 14 }} />
+            )}
+            <span
+              className="text-sm"
+              style={{
+                color: i <= stepIndex ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+              }}
+            >
+              {step}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="space-y-2">
+        <div className="research-skeleton" style={{ width: "90%" }} />
+        <div className="research-skeleton" style={{ width: "70%" }} />
+        <div className="research-skeleton" style={{ width: "80%" }} />
+      </div>
+    </div>
+  );
+};
 
 const EventExplorer: React.FC = () => {
   const { props, isPending, sendFollowUpMessage } = useWidget<Props>();
@@ -315,7 +353,7 @@ const EventExplorer: React.FC = () => {
                   </p>
                 )}
                 {isAnalyzing && !research && !researchError && (
-                  <p className="text-sm mb-3 text-secondary">Running research...</p>
+                  <ResearchLoadingIndicator />
                 )}
 
                 {research ? (
@@ -467,8 +505,9 @@ const EventExplorer: React.FC = () => {
 
             <div className="px-6 pb-6">
               {isAnalyzing && (
-                <div className="mb-4 text-sm text-secondary">
-                  Analyzing event...
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="research-spinner" />
+                  <span className="text-sm text-secondary">Analyzing event...</span>
                 </div>
               )}
               {mainResult ? (
