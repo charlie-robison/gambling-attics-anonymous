@@ -1,0 +1,57 @@
+{
+  "event_title": "Will the U.S. strike Iran?",
+  "signals": [
+    {
+      "market_id": "iran-today",
+      "market_title": "U.S. strikes Iran today (Feb 21)",
+      "prediction": "no",
+      "confidence": "high",
+      "rationale": "The research portrays 2026 as a year of elevated but still contingent escalation risk, with no specific trigger identified for a strike on this particular day. Active indirect diplomacy in Oman and U.S. bandwidth constraints from other crises act as brakes on immediate action. Given these factors, a same‑day strike before 11:59 PM ET remains unlikely, so the 15% market price likely overstates the risk for just today."
+    },
+    {
+      "market_id": "iran-feb22",
+      "market_title": "U.S. strikes Iran by Feb 22",
+      "prediction": "no",
+      "confidence": "high",
+      "rationale": "Extending the window by one day slightly increases risk but does not change the structural picture: Trump’s 10–15 day deadline and active diplomacy point toward a calibrated process rather than an immediate decision. The research emphasizes multiple plausible paths for delaying or avoiding direct strikes in the near term. As a result, the probability of a strike by Feb 22 remains well below 50%, making the 22% market price somewhat high for such a narrow horizon."
+    },
+    {
+      "market_id": "iran-feb23",
+      "market_title": "U.S. strikes Iran by Feb 23",
+      "prediction": "no",
+      "confidence": "high",
+      "rationale": "By Feb 23, the U.S. is still only a few days into Trump’s publicly stated 10–15 day nuclear‑deal deadline, which makes it early for Washington to judge diplomacy as conclusively failed. Ongoing talks in Oman and the absence of a specific, dated catalyst in the research temper the risk of an immediate strike despite an escalation‑prone environment. This supports a sub‑50% probability for a strike by this date, implying the 28% market price is elevated but not wildly misaligned."
+    },
+    {
+      "market_id": "iran-feb24",
+      "market_title": "U.S. strikes Iran by Feb 24",
+      "prediction": "no",
+      "confidence": "medium",
+      "rationale": "The U.S. maintains credible first‑strike options and an escalatory posture, and verification gaps raise the background risk of miscalculation. However, the research repeatedly frames 2026 as escalation‑prone yet still avoidable, with indirect diplomacy and U.S. global commitments acting as meaningful constraints. No concrete catalyst maturing specifically by Feb 24 is identified, so while risk is non‑trivial, it remains below 50% for this short horizon, suggesting the 32% market price is modestly high."
+    },
+    {
+      "market_id": "iran-week",
+      "market_title": "U.S. strikes Iran within 7 days (by Feb 28)",
+      "prediction": "no",
+      "confidence": "medium",
+      "rationale": "Over a one‑week window, Trump’s 10–15 day deadline is in mid‑swing and the reinforced U.S. posture plus degraded signaling create a serious but still contingent risk of limited strikes. Active nuclear‑focused talks in Oman and U.S. overextension in other crises remain substantial brakes on immediate escalation. This balance indicates less than 50% odds for a strike by Feb 28, so the 45% market price appears somewhat aggressive relative to the evidence."
+    },
+    {
+      "market_id": "iran-twoweeks",
+      "market_title": "U.S. strikes Iran within 14 days (by Mar 7)",
+      "prediction": "yes",
+      "confidence": "medium",
+      "rationale": "A 14‑day window aligns closely with Trump’s stated 10–15 day deadline for a nuclear deal, during which he is openly entertaining limited strikes and has substantial ready strike capacity in theater. As the deadline matures, the probability that diplomacy is judged insufficient and that at least a limited strike is used to enforce red lines increases materially. While active indirect diplomacy and U.S. overextension act as brakes, the combination of reinforced posture, compressed timeline, and an escalation‑prone environment plausibly pushes the odds above 50% by Mar 7, suggesting the 58% market price may be roughly fair or slightly high."
+    },
+    {
+      "market_id": "iran-month",
+      "market_title": "U.S. strikes Iran by March 21",
+      "prediction": "yes",
+      "confidence": "high",
+      "rationale": "Over a one‑month horizon, the reinforced U.S. posture, Trump’s short nuclear-deal deadline, and degraded verification/signaling substantially elevate the likelihood of at least a limited strike. Iran’s continued enrichment posture and threats of decisive retaliation, coupled with its cohesive coercive apparatus, sustain a confrontational trajectory rather than rapid de‑escalation. Active diplomacy and U.S. global commitments temper but do not eliminate the risk, and external prediction markets pricing a 2026 strike above 50% support viewing this one‑month window as more likely than not to see a strike, broadly consistent with the 68% market price."
+    }
+  ],
+  "overall_analysis": "Across the date‑based markets, there is now a consistent monotonic structure: all very short‑term windows through Feb 28 are assessed as NO, while the 14‑day and one‑month windows flip to YES, reflecting the growing cumulative probability as Trump’s 10–15 day deadline matures. The key logical transition point is set between the one‑week and two‑week horizons, which aligns with the research’s emphasis on a short, explicit deadline and an escalation‑prone environment that becomes more dangerous as that deadline nears.\n\nConfidence is highest for the clearly short‑term NO calls (today through Feb 23), where the absence of any specific imminent trigger and the presence of active diplomacy make a near‑term strike unlikely, and for the one‑month YES call, where multiple structural drivers point toward elevated odds. Confidence is lower in the intermediate windows (Feb 24 and one week) where risk is meaningfully higher but still likely sub‑50%, and medium at the two‑week transition point where competing forces—reinforced posture and deadline pressure versus diplomatic and bandwidth constraints—are most finely balanced.\n\nThe rationales across markets have been aligned to avoid contradiction: early windows emphasize the brakes on immediate escalation and the contingency of triggers, while later windows highlight how the same structural factors, given more time, tip the balance toward at least one limited strike. This produces a coherent narrative in which risk is low but rising in the very near term and becomes more likely than not as the system moves through and beyond Trump’s stated deadline.\n\nOverall, the consolidated view interprets 2026 as a structurally escalation‑prone year, with probabilities that are modestly overstated in the earliest markets but roughly in line or only slightly high in the two‑week and one‑month markets. The main residual uncertainty centers on how firmly diplomatic efforts can offset the pressure created by the compressed deadline and reinforced U.S. posture as the weeks progress.",
+  "timestamp": "2026-02-21T22:06:13.400581+00:00",
+  "disclaimer": "This analysis is for informational purposes only and does not constitute financial advice. Prediction markets carry significant risk. Always conduct your own research and never risk more than you can afford to lose."
+}

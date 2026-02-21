@@ -1,0 +1,90 @@
+{
+  "research_output": {
+    "COMMENT": "This is the full JSON output from the research agent. Paste the entire results.json content here. The preprocessor will automatically extract what it needs (synthesis, key_findings, sentiment). Below is a minimal example structure.",
+
+    "main_event_research": {
+      "event_title": "US strikes Iran by...?",
+      "summary": "Your main event research summary here...",
+      "key_findings": [
+        "Key finding 1 from main event research",
+        "Key finding 2 from main event research",
+        "Key finding 3 from main event research"
+      ],
+      "news_links": [],
+      "sentiment": "bullish",
+      "sentiment_rationale": "Rationale for the sentiment rating..."
+    },
+
+    "sub_event_research": [
+      {
+        "sub_event_id": "sub-event-1",
+        "sub_event_title": "Sub event question?",
+        "summary": "Sub event research summary...",
+        "key_findings": [
+          "Key finding 1 from sub event",
+          "Key finding 2 from sub event"
+        ],
+        "news_links": [],
+        "sentiment": "neutral",
+        "sentiment_rationale": "Rationale..."
+      }
+    ],
+
+    "relationships": [],
+
+    "synthesis": "This is the overall synthesis narrative that combines all research into a coherent story. The preprocessor uses this as the primary research_summary because it is the most complete single-field representation of the research. It merges main event findings, sub-event findings, and their relationships.",
+
+    "research_timestamp": "2026-02-21T20:25:43.897822+00:00",
+    "disclaimer": "This research is for informational purposes only..."
+  },
+
+  "main_event": {
+    "title": "Will the U.S. strike Iran?",
+    "description": "Resolves YES if US conducts drone, missile, or air strike on Iranian soil or official Iranian embassy/consulate"
+  },
+
+  "markets": [
+    {
+      "id": "market-1",
+      "title": "U.S. strikes Iran today (Feb 21)",
+      "current_price": 0.15,
+      "description": "Resolves YES if strike occurs before 11:59 PM ET Feb 21"
+    },
+    {
+      "id": "market-2",
+      "title": "U.S. strikes Iran by Feb 22",
+      "current_price": 0.22,
+      "description": null
+    },
+    {
+      "id": "market-3",
+      "title": "U.S. strikes Iran by Feb 23",
+      "current_price": 0.28,
+      "description": null
+    },
+    {
+      "id": "market-4",
+      "title": "U.S. strikes Iran by Feb 24",
+      "current_price": 0.32,
+      "description": null
+    },
+    {
+      "id": "market-5",
+      "title": "U.S. strikes Iran within 7 days",
+      "current_price": 0.45,
+      "description": null
+    },
+    {
+      "id": "market-6",
+      "title": "U.S. strikes Iran within 14 days",
+      "current_price": 0.58,
+      "description": null
+    },
+    {
+      "id": "market-7",
+      "title": "U.S. strikes Iran by March 21",
+      "current_price": 0.68,
+      "description": "One month window"
+    }
+  ]
+}

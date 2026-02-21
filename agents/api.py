@@ -1,4 +1,4 @@
-"""FastAPI server exposing the Polymarket research agent over HTTP.
+"""FastAPI server exposing prediction-market agents over HTTP.
 
 Start:
     cd agents
@@ -12,13 +12,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from research_agent import AgentConfig, ResearchAgent, ResearchInput, ResearchOutput
+from risk_management_agent import (
+    RiskAgentConfig,
+    RiskManagementAgent,
+    RiskManagementInput,
+    RiskAnalysisOutput,
+)
 
 load_dotenv()
 
 app = FastAPI(
-    title="Polymarket Research Agent API",
-    description="Parallel web research on prediction-market events powered by GPT-5.1",
-    version="1.0.0",
+    title="Polymarket Agent API",
+    description="Research and risk management agents for prediction markets, powered by GPT-5.1",
+    version="1.1.0",
 )
 
 # Allow the MCP server (or any local dev tool) to call this
@@ -52,4 +58,24 @@ async def research(
     """
     config = AgentConfig(model=model, total_timeout=timeout)
     agent = ResearchAgent(config=config)
+    return await agent.run(body)
+
+
+@app.post("/risk", response_model=RiskAnalysisOutput)
+async def risk_analysis(
+    body: RiskManagementInput,
+    model: str = Query("gpt-5.1", description="OpenAI model to use"),
+    timeout: float = Query(90.0, description="Total pipeline timeout in seconds"),
+) -> RiskAnalysisOutput:
+    """Generate trading signals for prediction markets based on research.
+
+    Accepts the full research agent output plus main event and markets.
+    The research output is automatically preprocessed to extract what the
+    LLM needs, then markets are analysed in parallel batches and
+    reconciled for cross-market consistency.
+
+    Typical response time: ~25-40 seconds for 20 markets.
+    """
+    config = RiskAgentConfig(model=model, total_timeout=timeout)
+    agent = RiskManagementAgent(config=config)
     return await agent.run(body)
