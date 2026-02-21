@@ -20,28 +20,48 @@ logger = logging.getLogger(__name__)
 # --- Singletons ---
 
 chroma_client = chromadb.PersistentClient(path="./chroma_data")
+try:
+    chroma_client.delete_collection("polymarket_markets")
+except Exception:
+    pass
+
 collection = chroma_client.get_or_create_collection(
-    name="polymarket_markets",
+    name="polymarket_events",
     metadata={"hnsw:space": "cosine"},
 )
 
 openai_client = AsyncOpenAI()
 clob_client = ClobClient("https://clob.polymarket.com")
 
-GAMMA_API = "https://gamma-api.polymarket.com/markets"
+GAMMA_API = "https://gamma-api.polymarket.com/events"
 DATA_API = "https://data-api.polymarket.com"
 POLL_INTERVAL = 300  # 5 minutes
 
 METADATA_FIELDS = [
-    "question", "category", "outcomes", "outcomePrices",
-    "volume", "volumeNum", "liquidity", "liquidityNum",
-    "endDate", "active", "closed", "slug", "conditionId",
+    "title", "category", "slug",
+    "volume", "liquidity",
+    "endDate", "active", "closed",
 ]
+
+
+def _slim_market(m: dict) -> dict:
+    return {
+        "id": m.get("id"),
+        "question": m.get("question"),
+        "outcomes": m.get("outcomes"),
+        "outcomePrices": m.get("outcomePrices"),
+        "conditionId": m.get("conditionId"),
+        "slug": m.get("slug"),
+        "active": m.get("active"),
+        "closed": m.get("closed"),
+        "volume": m.get("volume"),
+        "liquidity": m.get("liquidity"),
+    }
 
 
 # --- Polling ---
 
-async def fetch_and_store_markets():
+async def fetch_and_store_events():
     async with httpx.AsyncClient(timeout=30) as http:
         offset = 0
         all_new_ids = []
@@ -55,27 +75,27 @@ async def fetch_and_store_markets():
                 params={"limit": 100, "offset": offset, "active": "true", "closed": "false"},
             )
             resp.raise_for_status()
-            markets = resp.json()
-            if not markets:
+            events = resp.json()
+            if not events:
                 break
 
-            ids = [str(m["id"]) for m in markets]
+            ids = [str(event["id"]) for event in events]
             existing = collection.get(ids=ids, include=[])
             existing_ids = set(existing["ids"])
 
-            for m in markets:
-                mid = str(m["id"])
-                if mid in existing_ids or mid in seen_ids:
+            for event in events:
+                eid = str(event["id"])
+                if eid in existing_ids or eid in seen_ids:
                     continue
-                question = m.get("question", "")
-                description = m.get("description", "")
-                doc = f"{question} {description}".strip()
+                title = event.get("title", "")
+                description = event.get("description", "")
+                doc = f"{title} {description}".strip()
                 if not doc:
                     continue
 
                 meta = {}
                 for field in METADATA_FIELDS:
-                    val = m.get(field)
+                    val = event.get(field)
                     if val is not None:
                         # ChromaDB metadata only supports str, int, float, bool
                         if isinstance(val, (str, int, float, bool)):
@@ -83,8 +103,10 @@ async def fetch_and_store_markets():
                         else:
                             meta[field] = json.dumps(val)
 
-                seen_ids.add(mid)
-                all_new_ids.append(mid)
+                meta["markets"] = json.dumps([_slim_market(m) for m in event.get("markets", [])])
+
+                seen_ids.add(eid)
+                all_new_ids.append(eid)
                 all_new_docs.append(doc)
                 all_new_meta.append(meta)
 
@@ -98,15 +120,15 @@ async def fetch_and_store_markets():
                 metadatas=all_new_meta[i:i+500],
             )
 
-        logger.info(f"Added {len(all_new_ids)} markets to ChromaDB (total: {collection.count()})")
+        logger.info(f"Added {len(all_new_ids)} events to ChromaDB (total: {collection.count()})")
 
 
-async def poll_markets_loop():
+async def poll_events_loop():
     while True:
         try:
-            await fetch_and_store_markets()
+            await fetch_and_store_events()
         except Exception:
-            logger.exception("Error polling markets")
+            logger.exception("Error polling events")
         await asyncio.sleep(POLL_INTERVAL)
 
 
@@ -115,7 +137,7 @@ async def poll_markets_loop():
 
 @asynccontextmanager
 async def lifespan(app):
-    task = asyncio.create_task(poll_markets_loop())
+    task = asyncio.create_task(poll_events_loop())
     yield
     task.cancel()
 
@@ -130,26 +152,35 @@ class SearchRequest(BaseModel):
     n_results: int = 10
 
 
-class MarketResult(BaseModel):
-    id: str
+class MarketInfo(BaseModel):
+    id: str | None = None
     question: str | None = None
-    category: str | None = None
     outcomes: str | None = None
     outcomePrices: str | None = None
+    conditionId: str | None = None
+    slug: str | None = None
+    active: bool | None = None
+    closed: bool | None = None
     volume: str | None = None
-    volumeNum: float | None = None
     liquidity: str | None = None
-    liquidityNum: float | None = None
+
+
+class EventResult(BaseModel):
+    id: str
+    title: str | None = None
+    category: str | None = None
+    slug: str | None = None
+    volume: float | None = None
+    liquidity: float | None = None
     endDate: str | None = None
     active: bool | None = None
     closed: bool | None = None
-    slug: str | None = None
-    conditionId: str | None = None
+    markets: list[MarketInfo] = []
     relevance_score: float
 
 
 class SearchResponse(BaseModel):
-    results: list[MarketResult]
+    results: list[EventResult]
     expanded_queries: list[str]
 
 
@@ -229,24 +260,32 @@ async def search(req: SearchRequest):
         include=["metadatas", "distances"],
     )
 
-    # Merge: keep best (lowest) distance per market ID
+    # Merge: keep best (lowest) distance per event ID
     best: dict[str, tuple[float, dict]] = {}
     for q_idx in range(len(results["ids"])):
-        for i, mid in enumerate(results["ids"][q_idx]):
+        for i, eid in enumerate(results["ids"][q_idx]):
             dist = results["distances"][q_idx][i]
             meta = results["metadatas"][q_idx][i]
-            if mid not in best or dist < best[mid][0]:
-                best[mid] = (dist, meta)
+            if eid not in best or dist < best[eid][0]:
+                best[eid] = (dist, meta)
 
     # Sort by distance ascending, take top n
     sorted_results = sorted(best.items(), key=lambda x: x[1][0])[:req.n_results]
 
-    market_results = []
-    for mid, (dist, meta) in sorted_results:
+    event_results = []
+    for eid, (dist, meta) in sorted_results:
         score = 1.0 - (dist / 2.0)
-        market_results.append(MarketResult(id=mid, relevance_score=score, **meta))
+        markets_raw = meta.pop("markets", "[]")
+        markets = json.loads(markets_raw)
+        event_results.append(
+            EventResult(
+                id=eid, relevance_score=score,
+                markets=[MarketInfo(**m) for m in markets],
+                **meta,
+            )
+        )
 
-    return SearchResponse(results=market_results, expanded_queries=expanded)
+    return SearchResponse(results=event_results, expanded_queries=expanded)
 
 
 @app.get("/positions/{user}", response_model=list[Position])
