@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Optional
@@ -10,10 +11,11 @@ from typing import Optional
 import chromadb
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import MarketOrderArgs, OrderType
 
 try:
     from research_agent import AgentConfig, ResearchAgent, ResearchInput, ResearchOutput
@@ -39,7 +41,23 @@ collection = chroma_client.get_or_create_collection(
 )
 
 openai_client: Optional[AsyncOpenAI] = None
-clob_client = ClobClient("https://clob.polymarket.com")
+_private_key = os.getenv("PRIVATE_KEY")
+_funder = os.getenv("POLYMARKET_WALLET_ADDRESS")
+clob_trading_enabled = bool(_private_key and _funder)
+
+if clob_trading_enabled:
+    clob_client = ClobClient(
+        "https://clob.polymarket.com",
+        chain_id=137,
+        key=_private_key,
+        signature_type=2,
+        funder=_funder,
+    )
+    _api_creds = clob_client.create_or_derive_api_creds()
+    clob_client.set_api_creds(_api_creds)
+else:
+    clob_client = ClobClient("https://clob.polymarket.com")
+    logger.warning("PRIVATE_KEY and/or POLYMARKET_WALLET_ADDRESS not set; /order disabled")
 
 GAMMA_API = "https://gamma-api.polymarket.com/events"
 DATA_API = "https://data-api.polymarket.com"
@@ -192,6 +210,17 @@ class SearchResponse(BaseModel):
     expanded_queries: list[str]
 
 
+class OrderSide(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderRequest(BaseModel):
+    token_id: str
+    amount: float
+    side: OrderSide
+
+
 class PositionSortBy(str, Enum):
     CURRENT = "CURRENT"
     INITIAL = "INITIAL"
@@ -316,19 +345,19 @@ async def search(req: SearchRequest):
     return SearchResponse(results=event_results, expanded_queries=expanded)
 
 
-@app.get("/positions/{user}", response_model=list[Position])
+@app.get("/positions", response_model=list[Position])
 async def get_positions(
-    user: str,
-    market: Optional[str] = None,
-    eventId: Optional[str] = None,
-    sizeThreshold: Optional[float] = None,
-    redeemable: Optional[bool] = None,
-    mergeable: Optional[bool] = None,
+    market: str | None = None,
+    eventId: str | None = None,
+    sizeThreshold: float | None = None,
     limit: int = Query(default=100, ge=1),
     offset: int = Query(default=0, ge=0),
     sortBy: Optional[PositionSortBy] = None,
     sortDirection: Optional[PositionSortDirection] = None,
 ):
+    user = os.getenv("POLYMARKET_WALLET_ADDRESS")
+    if not user:
+        raise HTTPException(status_code=500, detail="POLYMARKET_WALLET_ADDRESS is not configured")
     params: dict = {"user": user, "limit": limit, "offset": offset}
     if market is not None:
         params["market"] = market
@@ -336,10 +365,6 @@ async def get_positions(
         params["eventId"] = eventId
     if sizeThreshold is not None:
         params["sizeThreshold"] = sizeThreshold
-    if redeemable is not None:
-        params["redeemable"] = str(redeemable).lower()
-    if mergeable is not None:
-        params["mergeable"] = str(mergeable).lower()
     if sortBy is not None:
         params["sortBy"] = sortBy.value
     if sortDirection is not None:
@@ -349,7 +374,28 @@ async def get_positions(
         resp = await http.get(f"{DATA_API}/positions", params=params)
         resp.raise_for_status()
         positions = resp.json()
-        return [p for p in positions if p.get("curPrice", 0) > 0]
+        return [
+            p for p in positions
+            if p.get("curPrice", 0) > 0
+            and not p.get("redeemable")
+            and not p.get("mergeable")
+        ]
+
+
+@app.post("/order")
+def place_order(req: OrderRequest):
+    if not clob_trading_enabled:
+        raise HTTPException(
+            status_code=500,
+            detail="Trading is not configured. Set PRIVATE_KEY and POLYMARKET_WALLET_ADDRESS.",
+        )
+    order_args = MarketOrderArgs(
+        token_id=req.token_id,
+        amount=req.amount,
+        side=req.side.value,
+    )
+    signed_order = clob_client.create_market_order(order_args)
+    return clob_client.post_order(signed_order, OrderType.FOK)
 
 
 @app.get("/")
