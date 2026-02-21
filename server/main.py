@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 from contextlib import asynccontextmanager
 from enum import Enum
 
@@ -11,6 +12,7 @@ from fastapi import FastAPI, Query
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import MarketOrderArgs, OrderType
 
 load_dotenv()
 
@@ -31,7 +33,17 @@ collection = chroma_client.get_or_create_collection(
 )
 
 openai_client = AsyncOpenAI()
-clob_client = ClobClient("https://clob.polymarket.com")
+_private_key = os.environ["PRIVATE_KEY"]
+_funder = os.environ["POLYMARKET_WALLET_ADDRESS"]
+clob_client = ClobClient(
+    "https://clob.polymarket.com",
+    chain_id=137,
+    key=_private_key,
+    signature_type=2,
+    funder=_funder,
+)
+_api_creds = clob_client.create_or_derive_api_creds()
+clob_client.set_api_creds(_api_creds)
 
 GAMMA_API = "https://gamma-api.polymarket.com/events"
 DATA_API = "https://data-api.polymarket.com"
@@ -184,6 +196,17 @@ class SearchResponse(BaseModel):
     expanded_queries: list[str]
 
 
+class OrderSide(str, Enum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderRequest(BaseModel):
+    token_id: str
+    amount: float
+    side: OrderSide
+
+
 class PositionSortBy(str, Enum):
     CURRENT = "CURRENT"
     INITIAL = "INITIAL"
@@ -288,19 +311,17 @@ async def search(req: SearchRequest):
     return SearchResponse(results=event_results, expanded_queries=expanded)
 
 
-@app.get("/positions/{user}", response_model=list[Position])
+@app.get("/positions", response_model=list[Position])
 async def get_positions(
-    user: str,
     market: str | None = None,
     eventId: str | None = None,
     sizeThreshold: float | None = None,
-    redeemable: bool | None = None,
-    mergeable: bool | None = None,
     limit: int = Query(default=100, ge=1),
     offset: int = Query(default=0, ge=0),
     sortBy: PositionSortBy | None = None,
     sortDirection: PositionSortDirection | None = None,
 ):
+    user = os.environ["POLYMARKET_WALLET_ADDRESS"]
     params: dict = {"user": user, "limit": limit, "offset": offset}
     if market is not None:
         params["market"] = market
@@ -308,10 +329,6 @@ async def get_positions(
         params["eventId"] = eventId
     if sizeThreshold is not None:
         params["sizeThreshold"] = sizeThreshold
-    if redeemable is not None:
-        params["redeemable"] = str(redeemable).lower()
-    if mergeable is not None:
-        params["mergeable"] = str(mergeable).lower()
     if sortBy is not None:
         params["sortBy"] = sortBy.value
     if sortDirection is not None:
@@ -321,7 +338,23 @@ async def get_positions(
         resp = await http.get(f"{DATA_API}/positions", params=params)
         resp.raise_for_status()
         positions = resp.json()
-        return [p for p in positions if p.get("curPrice", 0) > 0]
+        return [
+            p for p in positions
+            if p.get("curPrice", 0) > 0
+            and not p.get("redeemable")
+            and not p.get("mergeable")
+        ]
+
+
+@app.post("/order")
+def place_order(req: OrderRequest):
+    order_args = MarketOrderArgs(
+        token_id=req.token_id,
+        amount=req.amount,
+        side=req.side.value,
+    )
+    signed_order = clob_client.create_market_order(order_args)
+    return clob_client.post_order(signed_order, OrderType.FOK)
 
 
 @app.get("/")
