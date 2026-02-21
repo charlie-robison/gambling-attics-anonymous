@@ -1,9 +1,28 @@
 import React from "react";
-import type { MarketWithAction } from "../types";
+import type { MarketSignal, MarketWithAction } from "../types";
+
+const MIN_ORDER_SHARES = 5;
+
+type OrderSide = "BUY" | "SELL";
+
+type OrderFeedback = {
+  kind: "success" | "error";
+  message: string;
+};
 
 interface MarketAnalysisCardProps {
   market: MarketWithAction;
+  signal?: MarketSignal;
+  isSignalLoading?: boolean;
   onOpenMarket: (marketId: string, marketTitle: string) => void;
+  onPlaceOrder: (
+    marketId: string,
+    side: OrderSide,
+    amount: number
+  ) => void;
+  isBuyLoading?: boolean;
+  isSellLoading?: boolean;
+  orderFeedback?: OrderFeedback;
 }
 
 function formatVolume(value: number): string {
@@ -13,20 +32,29 @@ function formatVolume(value: number): string {
   return `$${value.toFixed(0)}`;
 }
 
-const actionButtonClass: Record<string, string> = {
-  buy: "action-button--buy",
-  sell: "action-button--sell",
-  hold: "action-button--hold",
-};
+function formatSignalLabel(value: string): string {
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
-const actionLabel: Record<string, string> = {
-  buy: "Buy",
-  sell: "Sell",
-  hold: "Hold",
-};
-
-export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({ market, onOpenMarket }) => {
+export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({
+  market,
+  signal,
+  isSignalLoading = false,
+  onOpenMarket,
+  onPlaceOrder,
+  isBuyLoading = false,
+  isSellLoading = false,
+  orderFeedback,
+}) => {
   const sortedOutcomes = [...market.outcomes].sort((a, b) => b.price - a.price).slice(0, 2);
+  const [orderAmount, setOrderAmount] = React.useState(String(MIN_ORDER_SHARES));
+
+  const parsedAmount = Number.parseFloat(orderAmount);
+  const isValidAmount = Number.isFinite(parsedAmount) && parsedAmount >= MIN_ORDER_SHARES;
+  const isSubmitting = isBuyLoading || isSellLoading;
 
   return (
     <div
@@ -36,6 +64,31 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({ market, 
       <h4 className="text-[14px] font-bold text-default leading-snug mb-3 line-clamp-2">
         {market.title}
       </h4>
+
+      {signal ? (
+        <div className="mb-3 rounded-lg border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] p-3">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="category-badge" style={{ color: "#4ade80" }}>
+              Prediction: {signal.prediction.toUpperCase()}
+            </span>
+            <span className="category-badge">
+              Confidence: {formatSignalLabel(signal.confidence)}
+            </span>
+          </div>
+          <p className="text-xs text-secondary leading-relaxed whitespace-pre-wrap">
+            {signal.rationale}
+          </p>
+        </div>
+      ) : isSignalLoading ? (
+        <div className="mb-3 rounded-lg border border-[rgba(96,165,250,0.25)] bg-[rgba(96,165,250,0.06)] p-3">
+          <p className="text-xs text-secondary mb-2">Loading risk prediction...</p>
+          <div className="space-y-2 animate-pulse">
+            <div className="h-4 w-40 rounded bg-[rgba(255,255,255,0.12)]" />
+            <div className="h-3 w-full rounded bg-[rgba(255,255,255,0.08)]" />
+            <div className="h-3 w-[85%] rounded bg-[rgba(255,255,255,0.08)]" />
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-2 mb-3">
         {sortedOutcomes.map((outcome) => (
@@ -59,18 +112,52 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({ market, 
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-xs text-secondary">{formatVolume(market.volume)}</span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenMarket(market.id, market.title);
-          }}
-          className={actionButtonClass[market.userAction]}
-        >
-          {actionLabel[market.userAction]}
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            min={String(MIN_ORDER_SHARES)}
+            step="0.01"
+            value={orderAmount}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => setOrderAmount(e.target.value)}
+            className="w-20 rounded-md border border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.04)] px-2 py-1 text-xs text-default"
+            aria-label={`Order amount for ${market.title}`}
+          />
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isValidAmount || isSubmitting) return;
+              onPlaceOrder(market.id, "BUY", parsedAmount);
+            }}
+            className="action-button--buy"
+            disabled={!isValidAmount || isSubmitting}
+          >
+            {isBuyLoading ? "Buying..." : "Buy"}
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!isValidAmount || isSubmitting) return;
+              onPlaceOrder(market.id, "SELL", parsedAmount);
+            }}
+            className="action-button--sell"
+            disabled={!isValidAmount || isSubmitting}
+          >
+            {isSellLoading ? "Selling..." : "Sell"}
+          </button>
+        </div>
       </div>
+      {orderFeedback && (
+        <p
+          className="text-[11px] mt-2"
+          style={{ color: orderFeedback.kind === "error" ? "#f87171" : "#4ade80" }}
+        >
+          {orderFeedback.message}
+        </p>
+      )}
     </div>
   );
 };
