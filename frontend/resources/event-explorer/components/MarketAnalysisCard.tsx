@@ -50,6 +50,8 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({
   orderFeedback,
 }) => {
   const sortedOutcomes = [...market.outcomes].sort((a, b) => b.price - a.price).slice(0, 2);
+  const yesOutcome = market.outcomes.find((o) => o.name.toLowerCase() === "yes");
+  const currentPrice = yesOutcome ? yesOutcome.price : sortedOutcomes[0]?.price;
   const [orderAmount, setOrderAmount] = React.useState(String(MIN_ORDER_SHARES));
 
   const parsedAmount = Number.parseFloat(orderAmount);
@@ -61,14 +63,25 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({
       className="market-card-v2 cursor-pointer"
       onClick={() => onOpenMarket(market.id, market.title)}
     >
-      <h4 className="text-[14px] font-bold text-default leading-snug mb-3 line-clamp-2">
+      <h4 className="text-[14px] font-bold text-default leading-snug mb-2 line-clamp-2">
         {market.title}
       </h4>
 
+      {currentPrice != null && (
+        <div className="mb-3">
+          <span className="text-2xl font-bold text-default tabular-nums">
+            {Math.round(currentPrice * 100)}¢
+          </span>
+          <span className="text-xs text-secondary ml-1">
+            {yesOutcome ? "Yes" : sortedOutcomes[0]?.name}
+          </span>
+        </div>
+      )}
+
       {signal ? (
-        <div className="mb-3 rounded-lg border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.08)] p-3">
+        <div className="mb-3 rounded-lg border border-[rgba(96,165,250,0.25)] bg-[rgba(96,165,250,0.08)] p-3">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="category-badge" style={{ color: "#4ade80" }}>
+            <span className="category-badge" style={{ color: "#60a5fa" }}>
               Prediction: {signal.prediction.toUpperCase()}
             </span>
             <span className="category-badge">
@@ -106,7 +119,7 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({
       {market.position && (
         <div className="text-xs text-secondary mb-3 py-2 border-t border-[rgba(255,255,255,0.06)]">
           <span className="text-default font-medium">{market.position.shares}</span> shares @ {Math.round(market.position.avgPrice * 100)}%
-          <span className={market.position.pnl >= 0 ? " text-[#4ade80]" : " text-[#f87171]"}>
+          <span className={market.position.pnl >= 0 ? " text-[#60a5fa]" : " text-[#f87171]"}>
             {" "}({market.position.pnl >= 0 ? "+" : ""}{market.position.pnlPercent.toFixed(1)}%)
           </span>
         </div>
@@ -153,7 +166,7 @@ export const MarketAnalysisCard: React.FC<MarketAnalysisCardProps> = ({
       {orderFeedback && (
         <p
           className="text-[11px] mt-2"
-          style={{ color: orderFeedback.kind === "error" ? "#f87171" : "#4ade80" }}
+          style={{ color: orderFeedback.kind === "error" ? "#f87171" : "#60a5fa" }}
         >
           {orderFeedback.message}
         </p>
