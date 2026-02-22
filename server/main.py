@@ -89,6 +89,7 @@ def _slim_market(m: dict) -> dict:
         "question": m.get("question"),
         "outcomes": m.get("outcomes"),
         "outcomePrices": m.get("outcomePrices"),
+        "clobTokenIds": m.get("clobTokenIds"),
         "conditionId": m.get("conditionId"),
         "slug": m.get("slug"),
         "active": m.get("active"),
@@ -202,6 +203,7 @@ class MarketInfo(BaseModel):
     question: Optional[str] = None
     outcomes: Optional[str] = None
     outcomePrices: Optional[str] = None
+    clobTokenIds: Optional[str] = None
     conditionId: Optional[str] = None
     slug: Optional[str] = None
     active: Optional[bool] = None

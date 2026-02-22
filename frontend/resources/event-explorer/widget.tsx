@@ -146,6 +146,17 @@ function buildResearchInput(
   };
 }
 
+function parseClobTokenIds(value?: string | null): string[] | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return parsed.map(String);
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
 function buildFallbackAnalysis(selectedEvent: MarketResult): AnalysisResult {
   const fallbackMarkets = (selectedEvent.markets ?? []).map((market, index) => ({
     id: market.id ?? `${selectedEvent.id}-market-${index + 1}`,
@@ -156,6 +167,7 @@ function buildFallbackAnalysis(selectedEvent: MarketResult): AnalysisResult {
     liquidity: toNumber(market.liquidity),
     endDate: market.endDate ?? new Date().toISOString(),
     outcomes: parseOutcomes(market.outcomes, market.outcomePrices),
+    clobTokenIds: parseClobTokenIds(market.clobTokenIds),
     imageUrl: undefined,
     isResolved: Boolean(market.closed),
     resolvedOutcome: undefined,
@@ -463,12 +475,26 @@ const EventExplorer: React.FC = () => {
       return;
     }
 
+    // Look up the CLOB token ID for the Yes outcome from the analysis markets
+    const marketData = analysis?.markets.find((m) => m.id === marketId);
+    const clobTokenId = marketData?.clobTokenIds?.[0];
+    if (!clobTokenId) {
+      setOrderFeedbackByMarket((previous) => ({
+        ...previous,
+        [marketId]: {
+          kind: "error",
+          message: "No CLOB token ID available for this market",
+        },
+      }));
+      return;
+    }
+
     const orderKey = `${marketId}:${side}`;
     setActiveOrderKey(orderKey);
 
     try {
       await placeOrder({
-        token_id: marketId,
+        token_id: clobTokenId,
         amount,
         side,
       });
