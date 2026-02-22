@@ -347,7 +347,7 @@ const ResearchLoadingIndicator: React.FC = () => {
         {RESEARCH_STEPS.map((step, i) => (
           <div key={step} className="flex items-center gap-2">
             {i < stepIndex ? (
-              <span className="text-xs" style={{ color: "#4ade80" }}>&#10003;</span>
+              <span className="text-xs" style={{ color: "#60a5fa" }}>&#10003;</span>
             ) : i === stepIndex ? (
               <span className="research-spinner" />
             ) : (
@@ -555,7 +555,7 @@ const EventExplorer: React.FC = () => {
               </h2>
             </div>
 
-            <div className="px-6 pb-4">
+            <div className={`px-6 pb-4${analysis.event.description === "No event description available." ? " hidden" : ""}`}>
               <div className="p-4 rounded-xl border border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.02)]">
                 <p className="text-sm text-secondary leading-relaxed">
                   {analysis.event.description}
@@ -564,7 +564,7 @@ const EventExplorer: React.FC = () => {
             </div>
 
             <div className="px-6 pb-4">
-              <div className="p-4 rounded-xl border border-[rgba(74,222,128,0.25)] bg-[rgba(74,222,128,0.06)]">
+              <div className="p-4 rounded-xl border border-[rgba(96,165,250,0.25)] bg-[rgba(96,165,250,0.06)]">
                 <div className="flex items-center justify-between gap-3 mb-3">
                   <h3 className="text-sm font-semibold text-default">Research</h3>
                   {mainEventResearch?.sentiment && (
@@ -794,7 +794,7 @@ const EventExplorer: React.FC = () => {
                 Results for "{query}"
               </h2>
               {expandedQueries.length > 0 && (
-                <p className="text-xs text-secondary mt-1">
+                <p className="text-xs text-secondary mt-1 hidden">
                   Also searched: {expandedQueries.join(", ")}
                 </p>
               )}

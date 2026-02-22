@@ -107,9 +107,9 @@ export const EventCard: React.FC<EventCardProps> = ({ market, onAnalyze, isMain 
               key={o.name}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
               style={{
-                background: o.price >= 0.5 ? "rgba(74, 222, 128, 0.1)" : "rgba(255, 255, 255, 0.06)",
-                color: o.price >= 0.5 ? "#4ade80" : "rgba(255, 255, 255, 0.7)",
-                border: `1px solid ${o.price >= 0.5 ? "rgba(74, 222, 128, 0.2)" : "rgba(255, 255, 255, 0.1)"}`,
+                background: o.name.toLowerCase() === "yes" ? "rgba(74, 222, 128, 0.1)" : o.name.toLowerCase() === "no" ? "rgba(248, 113, 113, 0.1)" : "rgba(255, 255, 255, 0.06)",
+                color: o.name.toLowerCase() === "yes" ? "#4ade80" : o.name.toLowerCase() === "no" ? "#f87171" : "rgba(255, 255, 255, 0.7)",
+                border: `1px solid ${o.name.toLowerCase() === "yes" ? "rgba(74, 222, 128, 0.2)" : o.name.toLowerCase() === "no" ? "rgba(248, 113, 113, 0.2)" : "rgba(255, 255, 255, 0.1)"}`,
               }}
             >
               <span>{o.name}</span>
@@ -132,7 +132,7 @@ export const EventCard: React.FC<EventCardProps> = ({ market, onAnalyze, isMain 
         )}
         {endDateStr && <span>Ends {endDateStr}</span>}
         {isMain && (
-          <span className="ml-auto text-xs font-medium" style={{ color: "rgba(74, 222, 128, 0.7)" }}>
+          <span className="ml-auto text-xs font-medium" style={{ color: "rgba(96, 165, 250, 0.7)" }}>
             {Math.round(market.relevance_score * 100)}% match
           </span>
         )}

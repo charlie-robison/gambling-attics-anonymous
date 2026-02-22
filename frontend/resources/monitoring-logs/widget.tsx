@@ -19,7 +19,7 @@ type LevelFilter = "all" | "info" | "trade" | "signal" | "error";
 
 const LEVEL_STYLES: Record<LogEntry["level"], { bg: string; text: string; border: string; label: string }> = {
   info:   { bg: "rgba(148,163,184,0.08)", text: "#94a3b8", border: "#475569", label: "INFO" },
-  trade:  { bg: "rgba(16,185,129,0.08)", text: "#10b981", border: "#059669", label: "TRADE" },
+  trade:  { bg: "rgba(96,165,250,0.08)", text: "#60a5fa", border: "#3b82f6", label: "TRADE" },
   signal: { bg: "rgba(59,130,246,0.08)", text: "#3b82f6", border: "#2563eb", label: "SIGNAL" },
   error:  { bg: "rgba(239,68,68,0.08)", text: "#ef4444", border: "#dc2626", label: "ERROR" },
 };
@@ -149,11 +149,11 @@ const MonitoringLogs: React.FC = () => {
                 width: "8px",
                 height: "8px",
                 borderRadius: "50%",
-                background: monitorCount > 0 ? "#10b981" : "#475569",
-                boxShadow: monitorCount > 0 ? "0 0 8px rgba(16,185,129,0.5)" : "none",
+                background: monitorCount > 0 ? "#60a5fa" : "#475569",
+                boxShadow: monitorCount > 0 ? "0 0 8px rgba(96,165,250,0.5)" : "none",
               }}
             />
-            <span style={{ fontSize: "12px", color: monitorCount > 0 ? "#10b981" : "#64748b" }}>
+            <span style={{ fontSize: "12px", color: monitorCount > 0 ? "#60a5fa" : "#64748b" }}>
               {monitorCount > 0
                 ? `${monitorCount} active monitor${monitorCount !== 1 ? "s" : ""}`
                 : "No active monitors"}
