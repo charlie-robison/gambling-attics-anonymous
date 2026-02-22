@@ -523,6 +523,40 @@ a {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* ---------- Research Spinner ---------- */
+@keyframes research-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes research-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.research-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(74, 222, 128, 0.2);
+  border-top-color: #4ade80;
+  border-radius: 50%;
+  animation: research-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.research-skeleton {
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(74, 222, 128, 0.06) 0%,
+    rgba(74, 222, 128, 0.15) 50%,
+    rgba(74, 222, 128, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: research-shimmer 1.6s ease-in-out infinite;
+}
+
 /* ---------- Line clamp utility ---------- */
 .line-clamp-2 {
   display: -webkit-box;

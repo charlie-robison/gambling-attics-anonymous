@@ -315,7 +315,7 @@ function buildResearchRequest(mainEvent: IncomingEvent, relatedEvents: IncomingE
 }
 
 async function runResearch(input: ResearchRequest): Promise<ResearchResponse> {
-  const RESEARCH_API_URL = process.env.RESEARCH_API_URL || "http://localhost:8000";
+  const RESEARCH_API_URL = process.env.RESEARCH_API_URL || "https://executable-easton-bifocal.ngrok-free.dev";
   const response = await fetch(`${RESEARCH_API_URL}/research`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -346,7 +346,7 @@ server.tool(
     },
   },
   async ({ query, n_results }) => {
-    const SEARCH_API_URL = process.env.SEARCH_API_URL || "http://localhost:8000";
+    const SEARCH_API_URL = process.env.SEARCH_API_URL || "https://executable-easton-bifocal.ngrok-free.dev";
 
     try {
       const response = await fetch(`${SEARCH_API_URL}/search`, {

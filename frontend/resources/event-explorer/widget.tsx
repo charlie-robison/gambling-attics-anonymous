@@ -38,7 +38,7 @@ type Props = EventExplorerProps;
 
 const RESEARCH_API_URL =
   (globalThis as { __RESEARCH_API_URL?: string }).__RESEARCH_API_URL ??
-  "http://localhost:8000";
+  "https://executable-easton-bifocal.ngrok-free.dev";
 const API_BASE_URL = RESEARCH_API_URL.replace(/\/$/, "");
 
 type OrderSide = "BUY" | "SELL";
